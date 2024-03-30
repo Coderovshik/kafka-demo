@@ -1,0 +1,56 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - kafka-network
+  
+  kafka:
+    image: confluentinc/cp-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD", "nc", "-vz", "localhost", "9092"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - ./api-gateway/config/.env
+    networks:
+      - kafka-network
+    ports:
+      - 8080:8080
+  
+  microservice:
+    build:
+      context: ./microservice
+      dockerfile: Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - ./microservice/config/.env
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    driver: bridge
